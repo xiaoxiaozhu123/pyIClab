@@ -55,8 +55,8 @@ class GenericAccessory(BaseAccessory, NamedTrinket):
         '''        
         Parameters:
         ----------
-        name: str, optional. 
-            The name of the accessory. Defaults to 'Nameless'.
+        name: str 
+            The identifier of the accessory.
         '''
         
         super().__init__(name=name)
