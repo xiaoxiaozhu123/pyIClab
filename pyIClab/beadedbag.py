@@ -5,7 +5,8 @@
 
 
 '''
-A junk shop of helper functions
+This file is stuffed with helper functions, useful or 
+useless.
 '''
 
 ##### Built-in import #####
