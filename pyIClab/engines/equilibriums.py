@@ -84,26 +84,6 @@ def complete_equilibrium(
     Boundary conditions:
     ### α >= 0, 0 <= β <= Q0, γ >= 0, 0 <= θ <= Q0 ### modified @20240315
     α >= 0, 0< = xβ <= Q, γ >= 0, 0<= yθ <= Q modified @20240315
-    ----------
-    i) If x/y = 1, we have
-    (1) βγ = Kαθ
-    (2) α + β = A
-    (3) γ + θ = B
-    (4) β + θ = Q/y => Q0
-    =>(1-K)β^2 + [B+KA+(K-1)Q0]β - KAQ0 = 0
-    => find β, consequently find α, γ, θ.
-    ----------
-    ii) If x/y = 2, we have
-    (1) βγ^2 = αθ^2*{K^(1/y) * Vs/Vm} => K0*αθ^2
-    (2) α + β = A
-    (3) γ + θ = B
-    (4) 2β + θ = Q/y => Q0
-    => aβ^3 + bβ^2 + cβ + d = 0
-    where 
-    a = 4 * (K + 1)
-    b = 4 * (B-Q) - 4*K*(A+Q)
-    c = 4*A*K*Q + B**2 - 2*B*Q + K*Q**2 + Q**2
-    d = -A*K*Q**2
     '''
     assert np.all(K != 1), 'The analyte ion should not be the eluting ion!'
     
@@ -288,21 +268,6 @@ def find_K_LSSM(
         yA(MP) + xE(SP)  <=>  yA(SP) + xE(MP)
          cAm      cEs          cAs      cEm
     => K^(1/y) =  (nAs/Vs)* (Vm/nAm) * cEm^(x/y) / (cEs)^(x/y)
-    => K^(1/y) = k * (1/Φ) * (cEm)^(x/y) / (cEs)^(x/y)
-    => 1/y * log(K) = log(k) - log(Φ) + (x/y)*log(cEm) - (x/y)log(cEs)
-    => log(k) = 1/y * log(K) + log(Φ) - (x/y)*log(cEm) + (x/y)log(cEs)
-    Assuming trace conditions (nA << nE), almost all the ion-exchange sites
-        are oppupied by Eluting ions.
-    => cEs = (Q/y) / Vs
-    => log(k) = (1/y)*log(K) + log(Φ) - (x/y)log(cEm) + (x/y)log(Q/y) - (x/y)log(Vs)
-    => log(k) = (1/y)*log(K) + (x/y)*log(Q/y) + (1-x/y)*log(Φ) - 
-        (x/y)*log(Vm) - (x/y)*log(cEm)
-    From empirical data of LSSM: log(k) = a + b*log(cEm)
-    => log(K) = y*a + (x-y)*log(Φ) + x*log(Vm) - x*log(Q/y)
-    (1) for (x, y) = (1, 1):
-        log(K) = a + log(Vm) - log(Q)
-    (2) for (x, y) = (2, 1)
-        log(K) = a + logΦ + 2*log(Vm) - 2*log(Q)
     '''
     Φ = phase_ratio
 
