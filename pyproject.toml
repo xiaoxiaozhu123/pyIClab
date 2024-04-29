@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyIClab"
+dynamic = ["version"]
+authors = [
+    {name = 'Kai "Kenny" Zhang', email = "PyICLab@outlook.com"},
+]
+description = "A python toolkit for ion chromatography"
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["ion chromatography", "hplc", "analytical chemistry", "model"]
+license = {text = "GPL-3.0"}
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Development Status :: 4 - Beta",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+]
+dependencies = [
+    'numpy>=1.26.4',
+    'scipy>=1.12.0',
+    'pandas>=2.2.0',
+    'pint>=0.23',
+    'matplotlib>=3.8.2',
+    'seaborn>=0.13.2',
+    'phreeqpython>=1.5.0',
+    'pyEQL>=0.12.2',
+    'monty>=2024.2.2',
+    'beautifulsoup4>=4.12.3',
+    'quadprog',
+    'deprecated',
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "pyIClab.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["pyIClab*"]
+exclude = ["__pycache__"]
+
+
+
+
