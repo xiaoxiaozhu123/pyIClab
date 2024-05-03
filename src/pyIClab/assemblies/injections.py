@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 '''
@@ -9,7 +9,7 @@ Copyright (C) 2024 PyICLab, Kai "Kenny" Zhang
 '''
 
 
-# In[1]:
+# In[2]:
 
 
 ##### Built-in import #####
@@ -34,7 +34,7 @@ from pyIClab.assemblies.columns import SampleLoop
 # --------------------------------------------------------------------------------
 
 
-# In[2]:
+# In[3]:
 
 
 class SwitchingPort(GenericAccessory):
@@ -219,7 +219,7 @@ class SwitchingPort(GenericAccessory):
         
 
 
-# In[3]:
+# In[4]:
 
 
 def _temporary_unlock(func):
@@ -238,7 +238,7 @@ def _temporary_unlock(func):
 Position = Literal['LOAD', 'INJECT']
 
 
-# In[4]:
+# In[5]:
 
 
 class SwitchingValve(NamedTrinket):
@@ -480,6 +480,15 @@ class SwitchingValve(NamedTrinket):
         port = self[i]
         
         return port.assemble(accessory, side)
+    
+    # --------------------------------------------------------------------------------
+    
+    def connect(self, *args, **kwargs):
+        '''
+        Alias for method `.assemble`.
+        '''
+        
+        return type(self).assemble(self, *args, **kwargs)
         
     # --------------------------------------------------------------------------------
     
@@ -516,6 +525,15 @@ class SwitchingValve(NamedTrinket):
     
     # --------------------------------------------------------------------------------
     
+    def disconnect(self, *args, **kwargs):
+        '''
+        Alias for method `.disassemble`.
+        '''
+        
+        return type(self).disassemble(self, *args, **kwargs)
+    
+    # --------------------------------------------------------------------------------
+    
     @classmethod
     def SixPort(cls, name: str='SixPort'):
         '''
@@ -535,7 +553,7 @@ class SwitchingValve(NamedTrinket):
 # --------------------------------------------------------------------------------
 
 
-# In[5]:
+# In[6]:
 
 
 __all__ = ['SwitchingPort', 'SwitchingValve', 'SampleLoop']

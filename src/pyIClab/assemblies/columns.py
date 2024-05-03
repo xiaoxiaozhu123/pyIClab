@@ -19,7 +19,6 @@ import warnings
 from typing import Callable, Iterable, Literal
 from copy import deepcopy
 from io import StringIO
-from bs4 import BeautifulSoup
 from importlib.resources import files
 
 ##### External import #####
@@ -27,6 +26,7 @@ import numpy as np
 import pandas as pd
 from pint import Unit, Quantity
 from numpy import ndarray
+from bs4 import BeautifulSoup
 
 ##### Local import #####
 

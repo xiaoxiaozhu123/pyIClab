@@ -1,6 +1,5 @@
-﻿formula,alias,pp_compat,diffusion_coefficient,molecular_weight
+formula,alias,pp_compat,diffusion_coefficient,molecular_weight
 # Inorganic,,,,
-# Base,,,,
 OH[-1],hydroxide,supported,5.273e-05 cm**2/s,17.00734 g/mol
 H[+1],hydronium,supported,9.311e-05 cm**2/s,1.00794 g/mol
 # F,,,,

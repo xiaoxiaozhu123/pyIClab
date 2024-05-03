@@ -450,6 +450,15 @@ class GenericAccessory(BaseAccessory, NamedTrinket):
 
     # --------------------------------------------------------------------------------
     
+    def connect(self, *args, **kwargs):
+        '''
+        Alias for method `.assemble`.
+        '''
+        
+        return type(self).assemble(self, *args, **kwargs)
+    
+    # --------------------------------------------------------------------------------
+    
     def disassemble(self,
         side: Literal['left', 'right', 'both'] =None,
         *, 
@@ -555,6 +564,15 @@ class GenericAccessory(BaseAccessory, NamedTrinket):
                 
     # --------------------------------------------------------------------------------
     
+    def disconnect(self, *args, **kwargs):
+        '''
+        Alias for method `.disassemble`.
+        '''
+        
+        return type(self).disassemble(self, *args, **kwargs)
+    
+    # --------------------------------------------------------------------------------
+    
     def flush(self) -> None:
         
         t0 = self.current_time.magnitude
@@ -600,7 +618,7 @@ class GenericAccessory(BaseAccessory, NamedTrinket):
     def plot(self, component: str =None) -> tuple[plt.Figure, plt.Axes]:
         '''
         Plots the concentration profiles of specified components or all components
-            from the eluent outlet.
+            from the accessory outlet.
         Returns a tuple containing a `Figure` instance and an `Axes` instance.
 
         Parameters:

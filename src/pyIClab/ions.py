@@ -26,7 +26,6 @@ from importlib.resources import files
 
 import pint
 import pandas as pd
-from numpy.typing import NDArray
 from pyEQL import IonDB
 from pyEQL.utils import standardize_formula
 
@@ -126,7 +125,7 @@ class Ion:
         
         c = r'$^{' + c + r'}$'
         
-        return ionbody + c
+        return (ionbody + c).replace('$$', '')
             
     # --------------------------------------------------------------------------------
     
@@ -235,7 +234,7 @@ class _IonLibary:
                 dc = dc.get('value')
         
         # We should use formula standarized by builtin get_ioninfo function
-        # In case pyEQL convert the formulas into those pyIClab doesn't
+        # In case pyEQL translate the formulas into those pyIClab doesn't
         # understand (NH4[+1], HPO4[-2], etc...)
         return Ion(
             formula=standard_formula,
@@ -287,7 +286,7 @@ def get_ioninfo(ion: str, _ionlab=IonLibrary) -> _FormulaInfo:
 
 
 def check_duplicated_ions_from_sequence(
-    ions: list[str] | tuple[str, ...] | NDArray[str],
+    ions: list[str] | tuple[str, ...],
     ) -> None:
     
     standard_formulas = [get_ioninfo(ion) for ion in ions]
