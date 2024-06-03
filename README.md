@@ -53,7 +53,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 ic = PackedIC()
-ic.start(tmax='10 min')
+ic.go(tmax='10 min')
 
 detector = ic.detectors.pop()
 df = detector.get_signals()
@@ -144,7 +144,7 @@ ic.reset_commands(commands)
 
 Think we are all set. Let's go.
 ```python
-ic.start('12 min')
+ic.go('12 min')
 ```
 
 Use the `.plot` method to show the effluent composition.
