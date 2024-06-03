@@ -1,6 +1,6 @@
 # PyICLab
 
-PyICLab is an open-source Python package designed for in-silico simulations of ion chromatography (IC). It features an object-oriented programming (OOP) interface, providing robust tools for realistic and customized simulations.
+PyICLab is an open-source Python package designed for in-silico simulations of ion chromatography (IC). 
 
 ## Features
 
