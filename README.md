@@ -49,4 +49,4 @@ ax.set_xlabel('Time, min')
 ax.set_ylabel('Concentration, mM')
 plt.show()
 ```
-
+![chrom_demo](demo_chromatogram.png)
