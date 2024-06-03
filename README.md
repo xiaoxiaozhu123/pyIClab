@@ -1,3 +1,6 @@
+![Python versions](https://img.shields.io/badge/python-03.11%20%7C%203.12-blue)
+[![PyPI version](https://badge.fury.io/py/pyIClab.svg)](https://badge.fury.io/py/pyIClab)
+
 # PyICLab
 
 PyICLab is an open-source Python package designed for in-silico simulations of ion chromatography (IC). 
