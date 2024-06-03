@@ -68,7 +68,7 @@ plt.show()
 ```
 ![chrom_demo](demo_chromatogram.png)
 
-## Or Build your IC system step by step:
+## Or build your IC system step by step:
 Import the necessary components from the PyICLab package.
 ```python
 from pyIClab import (
@@ -81,7 +81,7 @@ Create the necessary accessories for a basic IC system. Ensure each accessory ha
 - A six-port valve
 - A 25-µL sample loop
 ```python
-eluent = Eluent.HydroxideIsocratic('18 mM') # Name defaults to 'KOH'
+eluent = Eluent.HydroxideIsocratic('18 mM', fr='1 mL/min') # Name defaults to 'KOH'
 valve = SwitchingValve.SixPort() # Name defaults to 'SixPort'
 loop = SampleLoop('Loop', V='25 uL')
 ```
