@@ -47,4 +47,6 @@ fig, ax = plt.subplots()
 ax.plot('time', 'signal', data=df)
 ax.set_xlabel('Time, min')
 ax.set_ylabel('Concentration, mM')
+plt.show()
 ```
+
