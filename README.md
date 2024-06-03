@@ -23,7 +23,7 @@ pip3 install pyiclab
 ```
 ### Note for Apple Silicon Users
 
-PyICLab currently does not support the ARM64 architecture directly. To use PyICLab on Apple Silicon, you are advised to build your Python3 environment using an x86 version of conda/miniconda. 
+PyICLab currently DOES NOT support the ARM64 architecture directly. To use PyICLab on Apple Silicon, you are advised to build your Python3 environment using **an x86 version** of conda/miniconda. 
 
 ## Dependencies
 
