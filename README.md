@@ -37,7 +37,6 @@ PyICLab requires the following Python packages:
 - `seaborn>=0.13.2`
 - `phreeqpython>=1.5.0`
 - `pyEQL>=0.12.2`
-- `monty>=2024.2.2`
 - `beautifulsoup4>=4.12.3`
 - `tqdm>=4.66.2`
 - `quadprog`
