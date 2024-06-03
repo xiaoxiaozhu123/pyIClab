@@ -98,7 +98,7 @@ suppressor = QuickSuppressor('Suppressor', kind='anion')
 detector = Detector('Detector')
 ```
 
-Assemble all the accessories and install the IC system. I bet you have done it a lot.
+Connect all the accessories and install the IC system. I bet you have done it a lot.
 ```python
 valve.assemble(0, eluent)
 valve.assemble(1, column)
