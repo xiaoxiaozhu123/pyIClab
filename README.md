@@ -5,7 +5,7 @@ PyICLab is an open-source Python package designed for in-silico simulations of i
 ## Features
 
 - Implementations of IC components
-- Built-in Numerical models
+- Built-in numerical models
 - Flow path management
 - Suitable for complex IC setups and conditions
 
