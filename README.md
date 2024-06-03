@@ -68,7 +68,7 @@ plt.show()
 ```
 ![chrom_demo](demo_chromatogram.png)
 
-## Or you can build your IC system step by step:
+## Or Build your IC system step by step:
 Import the necessary components from the PyICLab package.
 ```python
 from pyIClab import (
