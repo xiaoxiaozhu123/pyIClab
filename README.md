@@ -25,6 +25,24 @@ pip3 install pyiclab
 
 PyICLab currently does not support the ARM64 architecture directly. To use PyICLab on Apple Silicon, you are advised to build your Python3 environment using an x86 version of conda/miniconda. 
 
+## Dependencies
+
+PyICLab requires the following Python packages:
+
+- `numpy>=1.26.4`
+- `scipy>=1.12.0`
+- `pandas>=2.2.0`
+- `pint>=0.23`
+- `matplotlib>=3.8.2`
+- `seaborn>=0.13.2`
+- `phreeqpython>=1.5.0`
+- `pyEQL>=0.12.2`
+- `monty>=2024.2.2`
+- `beautifulsoup4>=4.12.3`
+- `tqdm>=4.66.2`
+- `quadprog`
+- `deprecated`
+
 ## Get Started
 
 Here is a simple example to demonstrate the basic usage of PyICLab:
