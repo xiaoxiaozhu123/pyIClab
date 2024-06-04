@@ -18,11 +18,11 @@ PyICLab can be installed via PyPI using pip. Ensure you have Python 3.11 or high
 
 For Windows:
 ```sh
-pip install pyiclab
+pip install pyIClab
 ```
 For MacOS:
 ```sh
-pip3 install pyiclab
+pip3 install pyIClab
 ```
 ### Note for Apple Silicon Users
 
