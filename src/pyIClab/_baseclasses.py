@@ -63,6 +63,7 @@ class BaseModel(ABC):
     '''
     A base class for IC models...
     '''
+    
     @property
     @abstractmethod
     def _drop_when_updated(self) -> tuple:
@@ -72,6 +73,7 @@ class BaseModel(ABC):
             has been changed. It should be recomputed when
             needed. Implement this method by @cached_property.
         '''
+    
     @property
     @abstractmethod
     def _mutables(self) -> tuple:

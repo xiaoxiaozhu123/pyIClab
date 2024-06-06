@@ -82,28 +82,31 @@ class Eluent(GenericAccessory):
         Examples:
         ----------
         - Creating an isocratic 10 mM KOH eluent, with a flow rate of 1.2 mL/min:
-            elnt = Eluent(profile={'OH-': 10}, fr='1.2 mL/min') 
-            elnt = Eluent(profile={'OH-': '10 mM'}, fr=1.2) or
-            elnt = Eluent(profile={'hydroxide': ((0.0, 10), (10, 10))}, fr='1.2')
+            elnt = Eluent(name='KOH', profile={'OH-': 10}, fr='1.2 mL/min') 
+            elnt = Eluent(name='KOH', profile={'OH-': '10 mM'}, fr=1.2) or
+            elnt = Eluent(name='KOH', profile={'hydroxide': ((0.0, 10), (10, 10))}, fr='1.2')
             elnt = Eluent.HydroxideIsocratic('10.0 mM', fr='1.2mL/minute')
         - Creating a gradient KOH eluent, starting at 10 mM, holding for 10 min,
             and increasing to 20 mM within 10 min with a linear ramp:
-            g = Eluent(profile={
+            g = Eluent(name='KOH', profile={
                 'OH-':((0.0, 10), (10, 10), (20, 20)),
                 })
         - Creating an isocratic carbonates buffer, with 2.4 mM carbonate and 
             0.8 mM bicarbonate:
-            elnt = Eluent(profile={'CO3-2': '2.4 mmol/L', 'HCO3-': '.8 mmol/L'})
+            elnt = Eluent(
+                name='Carbobate-Buffer', profile={'CO3-2': '2.4 mmol/L', 'HCO3-': '.8 mmol/L'})
             elnt = Eluent.Carbonates(carbonate='2.4 mM', bicarbonate='.8 mM')
         - Use '+' operator to merge two eluent profiles:
             g1 = Eluent.HydroxideIsocratic(2.5)
-            g2 = Eluent(profile={
+            g2 = Eluent(
+                name='EG',
+                profile={
                 'OH-': (('6min', '5mM'), ('16min', '28mM'), ('20min', '65mM'),
                     ('25min', '65mM'), ('25.1min', '5mM'))})
             g3 = g1 + g2
             -----
-            elnt1 = Eluent(profile={'CO3-2': 2.4})
-            elnt2 = Eluent(profile={'HCO3-': '.8mM'})
+            elnt1 = Eluent(name='K2CO3', profile={'CO3-2': 2.4})
+            elnt2 = Eluent(name='KHCO3', profile={'HCO3-': '.8mM'})
             elnt3 = elnt1 + elnt2
 
         Note:

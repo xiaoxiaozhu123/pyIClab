@@ -10,7 +10,7 @@ if platform.machine().startswith("arm64") and platform.system().startswith("Darw
     raise OSError(
         '''Unsupported architecture: "arm64".\n'''
         '''To use PyICLab on Apple Silicon, you are advised to '''
-        '''built your python3 environment with by an x86 '''
+        '''built your python3 environment with an x86 '''
         '''version of conda/miniconda.'''
         )
 

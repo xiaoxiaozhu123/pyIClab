@@ -282,6 +282,18 @@ class Progressor:
 # -------------------------------------------------------------------------------- 
 
 
+# In[ ]:
+
+
+def r_squared(f, xdata, ydata, popt, pcov) -> float:
+    
+    residuals = ydata- f(xdata, *popt)
+    ss_res = np.sum(residuals**2)
+    ss_tot = np.sum((ydata - np.mean(ydata))**2)
+    
+    return 1 - (ss_res/ss_tot)
+
+
 # In[9]:
 
 
@@ -294,5 +306,6 @@ __all__ = [
     'proj2hull',
     'get_current_clock',
     'Progressor',
+    'r_squared',
     ]
 

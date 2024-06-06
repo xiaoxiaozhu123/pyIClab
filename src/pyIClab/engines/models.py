@@ -24,6 +24,7 @@ from types import MethodType
 
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from numpy import ndarray
 from deprecated import deprecated
 
@@ -61,7 +62,7 @@ class SegmentedColumnContainer:
     
     Parameters:
     ----------
-    hoster: GenericDiscontinousSegmentedModel, the host model instance.
+    host: GenericDiscontinousSegmentedModel, the host model instance.
     cAm: ndarray, shape(N,), concentration of the analyte in each segment MP, mM.
     nAs: ndarray, shape(N,), amount of analyte in each segment SP, nmol.   
     cEm: ndarray, shape(M, N), concentration of competing ions in each 
@@ -472,7 +473,7 @@ class GenericDiscontinousSegmentedModel(BaseModel):
     distribute_params: dict =field(default_factory=dict)
     post_distribute_params: dict =field(default_factory=dict)
     init_vessel_params: dict =field(default_factory=dict)
-    progress_bar: bool =True
+    verbose: bool =True
     tqdm_trange_params: dict =field(default_factory=dict)
     
     def __post_init__(self):
@@ -644,8 +645,9 @@ class GenericDiscontinousSegmentedModel(BaseModel):
         
     # --------------------------------------------------------------------------------
     
-    def plot(self) -> None:
+    def plot(self) -> tuple[plt.Figure, plt.Axes]:
         
+        sns.set()
         plt.rcParams.update(mpl_custom_rcconfig)
         fig, ax1 = plt.subplots()
         ax2 = ax1.twinx()
@@ -673,6 +675,8 @@ class GenericDiscontinousSegmentedModel(BaseModel):
             
         if not is_notebook():
             plt.show()
+            
+        return fig, ax1
         
     # --------------------------------------------------------------------------------
     
@@ -692,7 +696,7 @@ class GenericDiscontinousSegmentedModel(BaseModel):
             data = getattr(self.input, field.name)
             if not data.size:
                 raise ValueError('Empty input data detected.')
-        if self.progress_bar:
+        if self.verbose:
             myrange = lambda n, *, kw=self.tqdm_trange_params: tqdm.trange(n, **kw)
         else:
             myrange = range
@@ -795,7 +799,7 @@ GenericDiscontinousSegmentedModel.__init__.__doc__ = '''
         Note: mannually setting `ignore_tiny_amount` below 1e-20 will be
         ignored to avoid potential risks of numerical overflow...
     kmap: Callable[[ndarray,], ndarray].
-        a mappale function modeling the the logarithm of k to the base 10 
+        a mappale function modeling the logarithm of k to the base 10 
         of the analyte based on the concentrations of competing ions. 
         It accepts only one positional arguments: cE, which are 
         the concentrations of competing ions in shape(M, T).
@@ -821,8 +825,8 @@ GenericDiscontinousSegmentedModel.__init__.__doc__ = '''
         See `SegmentedColumnContainer` for vessel defination.
     init_vessel_params: dict, optional.
         Kwargs forward to init_vessel method.
-    progress_bar: bool, optional.
-        If True, show a progress bar while ruuning distribution itteration, which
+    verbose: bool, optional.
+        If True, show a progress bar while running distribution itteration, which
         is implemented via tqdm.trange method.
     tqdm_trange_params: dict, optional.
         forward to tqdm.trange method.
@@ -936,17 +940,17 @@ def _builtin_complete_equilibrium_distribution_method(
 @dataclass(kw_only=True, frozen=True, repr=False)
 class DSM_CompleteEquilibriums(GenericDiscontinousSegmentedModel):
     '''
-    An enchanced version of DSM_SimpleEquilibriums model. This model takes
+    A "harder" version of DSM_SimpleEquilibriums model. This model takes
         into consideration the redistribution of both analyte and competing 
         ion (competing ion) between column MP and SP.
     Obviously it takes a lot more computation efforts than the simplified version but
         to my surprise it's even somehow faster than the latter as for single-charged 
         analytes. Still need to find out why...(Already fixed by 2024/04/10, 
         see docstring of `DSM_SimpleEquilibriums`)...
-        It is 50% as slower for double-charged ones, and only applies well for 
+        It is 30-50% as slower for double-charged ones, and only applies well for 
         single/double-charged analytes and single-spiecies single-charged eluents.
         When passing a non-integer charge, this model will degrade and become
-        unbearably slow...
+        unbearably slow... (need to solve non-linear equations)
     This model is able to model column overloading.
     Alias: DSM_CEQ
     '''
@@ -971,10 +975,10 @@ class DSM_CompleteEquilibriums(GenericDiscontinousSegmentedModel):
         r = self.x / self.y[0]
         if not (0.99 <= r <= 1.01 or 1.99 <= r <= 2.01):
             warnings.warn(
-                '''\nThis model only supports single/double-charged analytes.\n'''
-                '''Processing an analyte & an elueting ion with charge ratio '''
-                f'''x/y = {r:.3f} can be extremely slow and '''
-                '''expections might occur.'''
+                '''\nThis model supports single/double-charged analytes.\n'''
+                '''Processing an analyte & an elueting ion with an effective charge ratio '''
+                f'''x/y = {r:.3f} on this model is not stable. '''
+                '''You may encounter low computational efficiency and numerical issues.'''
                 )
             
     # --------------------------------------------------------------------------------
@@ -1008,6 +1012,23 @@ DSM_CEQ = DSM_CompleteEquilibriums
 
 
 # In[7]:
+
+
+@dataclass(kw_only=True, frozen=True, repr=False)
+class DSM_IncompleteEquilibriums(GenericDiscontinousSegmentedModel):
+    '''
+    To.Do.
+    Expected to handle peak widths more accurately for gradient eluents.
+    '''
+    
+    def __post__init(self):
+        
+        raise NotImplementedError
+
+# --------------------------------------------------------------------------------
+
+
+# In[8]:
 
 
 # Helper functions:
@@ -1056,7 +1077,7 @@ def load_input_data_for_test(
     model.input_data(*input_arrays)
 
 
-# In[8]:
+# In[9]:
 
 
 __all__ = [

@@ -44,5 +44,5 @@ Sr[+2],strontium,supported,7.91e-06 cm**2/s,87.62 g/mol
 # Organics ,,,,
 HCOO[-1],formate,compatible,1.454e-05 cm**2/s,45.01744 g/mol
 CH3COO[-1],acetate,compatible,1.089e-05 cm**2/s,59.04402 g/mol
-# pyIClab.__version__: 2024-4-19 ,,,,
-# reference: pyEQL. IonDb ,,,,
+# pyIClab.__version__:  2024.06.06,,,,
+# Permision granted-diffusion coefficients and molecular weights for selected ions are pre-compiled using data from pyEQL,,,,

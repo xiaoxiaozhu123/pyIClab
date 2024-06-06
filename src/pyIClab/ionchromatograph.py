@@ -32,7 +32,7 @@ from pyIClab._baseclasses import (
     NamedTrinket, BaseConstructor, BaseIonChromatograph,
     )
 from pyIClab.interface import (
-    DSMConstrutorForTubings, DSM_SEConstrutor, DSM_CEConstrutor
+    DSMConstrutorForTubing, DSM_SEConstrutor, DSM_CEConstrutor
     )
 from pyIClab.errors import (
     ProfileError, InjectionError,
@@ -61,7 +61,7 @@ _ICModule = (
 _IA = _IndividualAccessory = (
     Eluent | Column | Detector | SwitchingPort | PEEKTubing | Suppressor)
 _GA = _GeneralAccessory = _ICModule | _IA
-_Injectables = PEEKTubing | SwitchingPort
+_Injectable = PEEKTubing | SwitchingPort
 _MethodParser = namedtuple('MethodPaser', ['method', 'args', 'kwargs'])
 
 class IonChromatograph(BaseIonChromatograph, NamedTrinket):
@@ -85,7 +85,7 @@ class IonChromatograph(BaseIonChromatograph, NamedTrinket):
         'DSM_CE'.lower(): DSM_CEConstrutor,
         'DSM_CompleteEquilibriums'.lower(): DSM_CEConstrutor,
         'DSM_CEQ'.lower(): DSM_CEConstrutor,
-        'GenericDiscontinousSegmentedModel'.lower(): DSMConstrutorForTubings,
+        'GenericDiscontinousSegmentedModel'.lower(): DSMConstrutorForTubing,
         }
     
     # --------------------------------------------------------------------------------
@@ -564,7 +564,7 @@ class IonChromatograph(BaseIonChromatograph, NamedTrinket):
         for tubing in [a for a in self.accessories if isinstance(a, GenericTubing)]:
             ModelConstructor = self._cached_model_constructor_types.get(tubing, None)
             if ModelConstructor is None and isinstance(tubing, PEEKTubing):
-                ModelConstructor = DSMConstrutorForTubings
+                ModelConstructor = DSMConstrutorForTubing
             
             for analyte in self.analytes:
                 tp.loc[len(tp.index), tp.columns] = pd.NA # add a row
@@ -815,7 +815,7 @@ class IonChromatograph(BaseIonChromatograph, NamedTrinket):
             accessory = module
         #
         nias = non_inject_accessories =  [
-            a for a in accessory.from_left() if not isinstance(a, _Injectables)]
+            a for a in accessory.from_left() if not isinstance(a, _Injectable)]
         if nias:
             raise InjectionError(nias)
             
@@ -968,6 +968,10 @@ class IonChromatograph(BaseIonChromatograph, NamedTrinket):
             prefix=f'Activating {self}...',
             suffix='IC simulation finished...\n',
             timer=True)(self.activate)(tmax)
+    
+    def go(self, *args, **kwargs):
+        
+        return self.start(*args, **kwargs)
 
 # --------------------------------------------------------------------------------
 

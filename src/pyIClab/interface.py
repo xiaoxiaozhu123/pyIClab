@@ -24,6 +24,7 @@ from scipy.interpolate import LinearNDInterpolator
 from scipy.stats import linregress
 from scipy.optimize import curve_fit
 from numpy import ndarray
+from deprecated import deprecated
 
 ##### Loacal import ######
 
@@ -155,7 +156,7 @@ class DSMConstructor(AbstractDSMConstructor):
     
     Abstract methods still need implementation:
         set_N, set_distribute, set_distribute_params, set_kmap, 
-        set_progress_bar, set_tqdm_trange_params, set_post_distribute,
+        set_verbose, set_tqdm_trange_params, set_post_distribute,
         set_post_distribute_params
     Use class attribute __abstractmethods__ to check the methods
         needing implemention...
@@ -266,9 +267,9 @@ class DSMConstructor(AbstractDSMConstructor):
 
 
 @dataclass(frozen=True)
-class DSMConstrutorForTubings(DSMConstructor):
+class DSMConstrutorForTubing(DSMConstructor):
     '''
-    An integral model constructor for tubings (those without stationary phases).
+    An integral model constructor for tubes (those without stationary phases).
         Only diffusion will take place.
     All abstract motheds are implemented.
     '''
@@ -314,11 +315,11 @@ class DSMConstrutorForTubings(DSMConstructor):
             )
         return dict(A_diff=A_diff, E_diff=E_diff)
     
-    def set_progress_bar(self) -> bool:
+    def set_verbose(self) -> bool:
         
         return True
     
-    def set_tqdm_trange_params(self) -> bool:
+    def set_tqdm_trange_params(self) -> dict:
         
         return dict(
             desc=f'Processing {self.analyte} on {self.host}',
@@ -374,7 +375,12 @@ class DSMConstrutorForColumns(DSMConstructor):
         assert host in ic.accessories
         
     # --------------------------------------------------------------------------------
-        
+    
+    @deprecated(
+        reason=('''It appears that using N_exp directly results in a larger ''' 
+            '''discrepancy between the model predictions and experimental results.'''),
+        version='2024.5.8',
+        )
     def set_N(self):
         
         N = self._retreive_N_from_designated_table()
@@ -382,6 +388,29 @@ class DSMConstrutorForColumns(DSMConstructor):
             return N
         else:
             return self._find_N_from_Hdata_under_average_eluent_condition()
+        
+    def set_N(self):
+        '''
+        Reference: V. Drgan et al. / J. Chromatogr. A 1216 (2009) 6502–6510
+        Fritz and Scott report on the connection between experimentally determined number 
+        of column segments and the number of col- umn segments in the Craig’s model 
+        needed to generate the same degree of bandspreading:
+        N = N_exp * k/(1+k)
+        '''
+        
+        N = self._retreive_N_from_designated_table()
+        if not pd.isna(N):
+            return N
+        else:
+            N_exp = self._find_N_from_Hdata_under_average_eluent_condition()
+            eluent = self.host.flow_head
+            c_mean = eluent.mean()
+            cE = tuple(c_mean.get(ion, 1e-4) for ion in self.competing_ions)
+            cE = np.reshape(cE, (-1, 1))
+            k_pred = 10 ** (np.squeeze(self.set_kmap()(cE)))
+            
+            return int(np.round(N_exp * k_pred / (1+k_pred), -1))
+    
         
     def _retreive_N_from_designated_table(self) -> int | None:
         
@@ -440,11 +469,11 @@ class DSMConstrutorForColumns(DSMConstructor):
     
     # --------------------------------------------------------------------------------
     
-    def set_progress_bar(self):
+    def set_verbose(self) -> bool:
         
         return True
     
-    def set_tqdm_trange_params(self):
+    def set_tqdm_trange_params(self) -> dict:
         
         return dict(
             desc=f'Processing {self.analyte} on {self.host}',
@@ -496,7 +525,7 @@ class DSM_CEConstrutor(DSMConstrutorForColumns):
 
 def _builtin_get_plates_for_isocratic_eluents(
     *,
-    Hdata: pd.DataFrame,
+    Hdata: dict,
     analyte: str,
     competing_ions: tuple[str, ...],
     concentrations: tuple[float, ...],
@@ -624,7 +653,7 @@ def _builtin_get_plates_from_constant_dV(
 
 def _builtin_get_kmap(
     *,
-    kdata: pd.DataFrame,
+    kdata: dict,
     analyte: str,
     competing_ions: tuple[str, ...],
     ) -> Callable[[ndarray,], ndarray]:
@@ -636,7 +665,7 @@ def _builtin_get_kmap(
         return _builtin_get_kmap_single_eluent(
             df=df, analyte=analyte, ion=competing_ions[0])
     elif set(competing_ions) == {'CO3[-2]', 'HCO3[-1]'}:
-        return _builtin_get_kmap_carbonates(df=df)
+        return _builtin_get_kmap_carbonates_simple_LSSM(df=df)
     else:
         raise NotImplementedError
     
@@ -666,12 +695,12 @@ def _builtin_get_kmap_single_eluent(
     # For single-species eluents M = 1.
     return lambda cE: a + b*np.log10(np.squeeze(cE))
 
-def _builtin_get_kmap_carbonates(*, df: pd.DataFrame) -> Callable[[ndarray,], ndarray]:
+def _builtin_get_kmap_carbonates_simple_LSSM(*, df: pd.DataFrame) -> Callable[[ndarray,], ndarray]:
     '''
-    reference:
-    Analytical Chemistry, Vol. 74, No. 23, December 1, 2002
+    A simple LSSM for carbonate buffer, kmap is described as:
+    logk = A + B*logCO3 + C*logHCO3
+    It is the default method in PyICLab for carbonate buffers, may loss accuraccy on some occasions.
     '''
-    # Update 2024/04/09
     def fit_func(logc, A, B, C):
         logCO3, logHCO3 = logc
         return A + B*logCO3 + C*logHCO3
@@ -693,9 +722,42 @@ def _builtin_get_kmap_carbonates(*, df: pd.DataFrame) -> Callable[[ndarray,], nd
         return A + np.sum(np.log10(cE)*np.array([[B], [C]]), axis=0)
     
     return kmap
+
+def _builtin_get_kmap_carbonates_LSSM_EA(*, df: pd.DataFrame) -> Callable[[ndarray,], ndarray]:
+    '''
+    reference:
+    Analytical Chemistry, Vol. 74, No. 23, December 1, 2002
+    
+    I think they've got the wrong Equation(4) in Trends in Analytical Chemistry 80 (2016) 625–635.
+    [Et] -> log[Et]
+    '''
+    
+    def fit_func(cE, f1, f2, f3, f4):
+        
+        c1 = cE[0, :]
+        Et = np.sum(cE, axis=0)
+        logEt = np.log10(Et)
+        
+        return (f1 + f2*logEt) + (f3 + f4*logEt)*np.log10(c1)
+    
+    carb, bicarb = 'CO3[-2]', 'HCO3[-1]'
+    cE = np.array([df[carb].to_numpy(), df[bicarb].to_numpy()])
+    logk = np.log10(df['k'])
+    initial_guess = [1, -0.5, 1, -0.5]
+    
+    constants, pcov = curve_fit(fit_func, cE, logk, p0=initial_guess)
+    
+    def kmap(cE: ndarray):
+        
+        cE = np.array(cE, dtype=np.float64)
+        cE[cE<1e-4] = 1e-4
+        
+        return fit_func(cE, *constants)
+    
+    return kmap   
+    
         
 # --------------------------------------------------------------------------------
-    
 
 
 # In[10]:
@@ -704,7 +766,7 @@ def _builtin_get_kmap_carbonates(*, df: pd.DataFrame) -> Callable[[ndarray,], nd
 __all__ = [
     'ModelManager',
     'DSMConstructor',
-    'DSMConstrutorForTubings',
+    'DSMConstrutorForTubing',
     'DSMConstrutorForColumns',
     'DSM_SEConstrutor',
     'DSM_CEConstrutor',

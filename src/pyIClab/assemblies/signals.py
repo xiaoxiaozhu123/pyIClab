@@ -412,7 +412,7 @@ class QuickSuppressor(Suppressor):
 class PhreeqcSuppressor(Suppressor):
     '''
     A more complex implementation of the Suppressor class.
-    The suppressor initially replaces competing ions in the eluent with H+ (for AEC) 
+    The suppressor initially replaces counterions in the eluent with H+ (for AEC) 
         and OH- (for CEC), then uses the PHREEQC engine to equilibrate the eluent, 
         offering more accurate suppression results.
     Provides more realistic suppression outcomes compared to QuickSuppressor
@@ -447,7 +447,6 @@ class PhreeqcSuppressor(Suppressor):
                     # discard counterions in-place
                     f = datasets.pop(component)
                     # accumulate charge, charge=charge is essential
-                    # never forget it again... tricky bug...
                     g = lambda t, *, f0=g, f1=f, charge=charge: f0(t) + abs(charge)*f1(t)
         
         if self.kind == 'anion':
@@ -577,6 +576,8 @@ class PhreeqcSuppressor(Suppressor):
             if not i % 1000: # garbage collection
                 pp.remove_solutions(pp.get_solution_list())
                 
+        pp.remove_solutions(pp.get_solution_list())
+        
         return pseudo_eq_profile
     
     # --------------------------------------------------------------------------------

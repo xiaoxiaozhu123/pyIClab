@@ -20,7 +20,7 @@ from typing import Tuple, Callable
 
 import numpy as np
 from numpy import ndarray
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, newton_krylov
 from deprecated import deprecated
 
 ##### Local import #####
@@ -85,10 +85,6 @@ def complete_equilibrium(
     Eq(2): nAm + nAs = init(nAm + nAs)
     Eq(3): nEm + nEs = init(nEm + nEs)
     Eq(4): Q = nAs + nEs
-    Let  nAm  nAs  nEm  nEs
-          α    β    γ    θ
-    init(nAm + nAs) = A
-    init(nEm + nEs) = B
     '''
     assert np.all(K != 1), 'The analyte ion should not be the eluting ion!'
     
@@ -105,8 +101,7 @@ def complete_equilibrium(
             
     else:
         # Handling arbitary charge-ratios.
-        # Just leaving an API, scipy.optimize.fsolve is extremely
-        # time-consuming when solving non-linear equations.
+        # quite time-consuming when solving non-linear equations.
             
         return _complete_equilibrium_arbitrary_charges(
             nAm, nAs, nEm, nEs, Q, K, x, y, Vm, Vs)
@@ -176,8 +171,8 @@ def _complete_equilibrium_double_charges(A, B, Q, K, y, Vm, Vs):
     return α, β, γ, θ
 
 # --------------------------------------------------------------------------------
-@deprecated(reason='This method would run good, but unbearably slow.')
-def _complete_equilibrium_arbitrary_charges(
+@deprecated(reason='Unbearably slow. It will be removed soon.')
+def _complete_equilibrium_arbitrary_charges_fsolve(
     nAm, nAs, nEm, nEs, Q, K, x, y, Vm, Vs):
     '''
     This method uses the fsolve function from scipy.optimize for finding the roots 
@@ -188,10 +183,16 @@ def _complete_equilibrium_arbitrary_charges(
         
         return K0 * (A-β) * (Q0-r*β)**r - β*(r*β + B - Q0)**r
     
-    nAm = nAm.copy()
-    nAs = nAs.copy()
-    nEm = nEm.copy()
-    nEs = nEs.copy()
+    def jac(β, A, B, Q0, K0, r):
+        
+        term1 = (Q0 - r * β)**r
+        term2 = A - β
+        term3 = (r * β + B - Q0)**r
+        dterm1_dβ = -r * (Q0 - r * β)**(r-1)
+        dterm3_dβ = r**2 * (r * β + B - Q0)**(r-1)
+        jac_values = K0 * (-term1 + term2 * dterm1_dβ) - (term3 + β * dterm3_dβ)
+        
+        return np.diag(jac_values)
     
     A = nAm + nAs
     B = nEm + nEs
@@ -212,26 +213,91 @@ def _complete_equilibrium_arbitrary_charges(
     Q0 = Q / y
     r = x / y
     K0 = K**(1/y) * (Vs/Vm)**(1-r)
-    β0 = nAs[~fast_mask].copy()
+    β0 = nAs[~fast_mask]
     
     β = fsolve(
         func=f,
         x0=β0,
         args=(A, B, Q0, K0, r),
+        fprime=jac,
         )
     
     α = A - β
     θ = Q0 - r*β
     γ = B - θ
+    Qx = Q / x
     
     # deal with numerical overflows
     for arr in (α, β, θ, γ):
-        mask = (arr>=-1e-7) & (arr<0)
+        mask = (arr>-1e-7) & (arr<0)
         arr[mask] = 0.0
     
-    mask1 = (β>Q/x) & (β<Q/x+1e-7)
-    β = np.where(mask1, Q/x, β)
-    assert np.all((β>=0) & (β<=Q/x))
+    mask1 = (β>Qx) & (β<Qx+1e-7)
+    β = np.where(mask1, Qx, β)
+    assert np.all((β>=0) & (β<=Qx))
+    
+    mask2 = (θ>Q0) & (θ<Q0)
+    θ = np.where(mask2, Q0, θ)
+    
+    nAm[~fast_mask] = α
+    nAs[~fast_mask] = β
+    nEm[~fast_mask] = γ
+    nEs[~fast_mask] = θ
+    
+    return nAm, nAs, nEm, nEs
+
+# --------------------------------------------------------------------------------
+def _complete_equilibrium_arbitrary_charges(
+    nAm, nAs, nEm, nEs, Q, K, x, y, Vm, Vs):
+    '''
+    This method uses the Newton-Krylov from scipy.optimize for finding the roots 
+        of the equilibrium equation.
+    Update 2024.5.15: subsitute `newton_krylov` for `fsolve`.
+    '''
+    @np.errstate(all='ignore')
+    def f(β, A, B, Q0, K0, r):
+        
+        return K0 * (A-β) * (Q0-r*β)**r - β*(r*β + B - Q0)**r
+    
+    A = nAm + nAs
+    B = nEm + nEs
+    
+    fast_mask = (A<1e-7) | (B<1e-7)
+    
+    if np.all(fast_mask): 
+        return nAm, nAs, nEm, nEs
+    
+    A = A[~fast_mask]
+    B = B[~fast_mask]
+    
+    # Q, Vs, Vm should be in shape(N,)
+    Q = Q[~fast_mask]
+    Vs = Vs[~fast_mask]
+    Vm = Vm[~fast_mask]
+    
+    Q0 = Q / y
+    r = x / y
+    K0 = K**(1/y) * (Vs/Vm)**(1-r)
+    β0 = nAs[~fast_mask]
+    
+    β = newton_krylov(
+        F=lambda beta: f(beta, A, B, Q0, K0, r),
+        xin=β0,
+        )
+    
+    α = A - β
+    θ = Q0 - r*β
+    γ = B - θ
+    Qx = Q / x
+    
+    # deal with numerical overflows
+    for arr in (α, β, θ, γ):
+        mask = (arr>-1e-7) & (arr<0)
+        arr[mask] = 0.0
+    
+    mask1 = (β>Qx) & (β<Qx+1e-7)
+    β = np.where(mask1, Qx, β)
+    assert np.all((β>=0) & (β<=Qx))
     
     mask2 = (θ>Q0) & (θ<Q0)
     θ = np.where(mask2, Q0, θ)
@@ -266,16 +332,15 @@ def find_K_LSSM(
     phase_ratio: float,
     Q: float, # umol
     Vm: float, # mL
-    x: int,
-    y: int) -> float:
+    x: int | float,
+    y: int | float,
+    ) -> float:
     '''
     Equilibrium:
         yA(MP) + xE(SP)  <=>  yA(SP) + xE(MP)
          cAm      cEs          cAs      cEm
     '''
-    Φ = phase_ratio
-
-    logK = y*a + (x-y)*np.log10(Φ) + x*np.log10(Vm/Q*y)
+    logK = y*a + (x-y)*np.log10(phase_ratio) + x*np.log10(Vm/Q*y)
             
     return 10**logK
 
