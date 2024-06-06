@@ -69,7 +69,7 @@ ax.set_xlabel('Time, min')
 ax.set_ylabel('Concentration, mM')
 plt.show()
 ```
-![chrom_demo](demo_chromatogram.png)
+![demo-chromatogram](https://github.com/xiaoxiaozhu123/pyIClab/blob/main/demo_chromatogram.png?raw=true)
 
 ## Or build your IC system step by step
 Import the necessary components from the PyICLab package.
@@ -155,4 +155,4 @@ Use the `.plot` method to show the effluent composition.
 ```python
 detector.plot()
 ```
-![chrom_demo](demo_chromatogram02.png)
+![demo-chromatogram](https://github.com/xiaoxiaozhu123/pyIClab/blob/main/demo_chromatogram02.png?raw=true)
