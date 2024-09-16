@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyIClab"
-dynamic = ["version"]
+dynamic = ["version", "urls"]
 authors = [
     {name = 'Kai "Kenny" Zhang', email = "PyICLab@outlook.com"},
 ]
