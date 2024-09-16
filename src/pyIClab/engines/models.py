@@ -9,14 +9,14 @@ Copyright (C) 2024 PyICLab, Kai "Kenny" Zhang
 '''
 
 
-# In[2]:
+# In[10]:
 
 
 ##### Built-in import #####
 
 import warnings
 from dataclasses import dataclass, fields, field
-from functools import cached_property, lru_cache
+from functools import cached_property
 from typing import Self, Callable
 from types import MethodType
 
@@ -28,15 +28,20 @@ import seaborn as sns
 from numpy import ndarray
 from deprecated import deprecated
 
-##### Local import #####
+##### Local import #####F
 
 import pyIClab.ions as ions_
 from pyIClab.units import ParseQuantities
 from pyIClab._baseclasses import BaseModel 
-from pyIClab.beadedbag import is_notebook, mpl_custom_rcconfig
+from pyIClab.utils.beadedbag import is_notebook, mpl_custom_rcconfig
+from pyIClab.utils.optimize import find_K_LSSM
 from pyIClab.assemblies.eluents import Eluent
-from pyIClab.engines.equilibriums import (
-    complete_simple_equilibrium, complete_equilibrium, find_K_LSSM,
+from pyIClab.utils.methods import (
+    kmap_for_GDSM_testing, no_retain_kmap, bypass_method,
+    analyte_diffusion_method, eluent_diffusion_method, diffusion_method,
+    total_mix_eluent, total_mix_analyte, fill_column_with_eluent,
+    init_vessel_with_injection, simple_equilibrium_distribution_method,
+    complete_equilibrium_distribution_method, bypass_hmap,
     )
 
 ##### Conditional import #####
@@ -45,7 +50,22 @@ if is_notebook():
     import tqdm.notebook as tqdm
 else:
     import tqdm
-    
+
+##### Compatibility ##### DO NOT REMOVE IT!!
+
+_builtin_kmap_for_GDSM_testing = kmap_for_GDSM_testing
+builtin_no_retain_kmap = no_retain_kmap
+builtin_bypass_method = bypass_method
+builtin_analyte_diffusion_method = analyte_diffusion_method
+builtin_eluent_diffusion_method = eluent_diffusion_method
+builtin_diffusion_method = diffusion_method
+_total_mix = total_mix_eluent
+_total_mix_analyte = total_mix_analyte
+builtin_fill_column_with_eluent = fill_column_with_eluent
+builtin_init_vessel_with_injection = init_vessel_with_injection
+_builtin_simple_equilibrium_distribution_method = simple_equilibrium_distribution_method
+_builtin_complete_equilibrium_distribution_method = complete_equilibrium_distribution_method
+
 # --------------------------------------------------------------------------------
 
 
@@ -244,195 +264,14 @@ class SegmentedColumnContainer:
         vessel.nAs = _convert_array(self.nAs, N0, N1) * N0 / N1 # essential
         vessel.cEm = np.array([_convert_array(c, N0, N1) for c in self.cEm])
         vessel.nEs = np.array([_convert_array(n, N0, N1)  * N0 / N1 for n in self.nEs])
-
-    
+ 
     # --------------------------------------------------------------------------------
   
 
 
-# In[4]:
+# In[11]:
 
 
-def _builtin_kmap_for_GDSM_testing(cEm: ndarray):
-
-    # LSSM logk = 1.6 - 1.0 * logc
-        
-    return 1.6 - np.log10(np.squeeze(cEm))
-
-# --------------------------------------------------------------------------------
-
-def builtin_no_retain_kmap(cEm: ndarray) -> ndarray:
-    '''
-    The default kmap is defined here...
-    You can customize the kmap by either passing a new `kmap` func when 
-    initializing the model or applying stationary phase properties.
-    Modify model.vessel in-place...
-    '''
-    
-    cEm = np.array(cEm)
-    
-    return -np.ones(cEm.shape[-1]) * np.inf
-
-# --------------------------------------------------------------------------------
-
-def builtin_bypass_method(model: BaseModel, /, **kwargs):
-    '''
-    The default method is defined here...
-    This method doesn't do nothing...it serves as a placeholder...
-    You can customize the model by passing new method funcs when 
-    initializing the model.
-    Note:
-    (1) New funcs should modify model.vessel in-place...
-    (2) New funcs should take `model` intance as the first
-        positional argument followed by kw arguments if any.
-    (3) New funcs should support vectorized computations...
-    '''
-    pass
-
-# --------------------------------------------------------------------------------
-@lru_cache
-def _get_diffusion_factor_A(model: BaseModel, A_diff: float) -> ndarray:
-    
-    vessel = model.vessel
-    D = A_diff
-    dL = model.dL / 2
-    dV = vessel.dVm / 2 # shape(N,)
-    dt = model.dt
-    S = model.S / (1+vessel.phase_ratio) # shape(N,)
-    
-    return D*S[:-1]*dt / (dL*dV[:-1]) * 6e4
-
-
-def builtin_analyte_diffusion_method(model: BaseModel, /, *,
-    A_diff: float=None) -> None:
-    '''
-    A built-in method to simulate analyte diffusion.
-    Do not apply it unless when loading a highly concentrated sample...
-    Modify model.vessel in-place...
-    
-    A_diff: the diffusion coefficient of the analyte in cm**2/sec.
-    '''
-    if A_diff is None: return
-    
-    vessel = model.vessel
-    ΔcAm = np.diff(vessel.cAm)
-    Δc = _get_diffusion_factor_A(model, A_diff) * ΔcAm
-    overflow = ((ΔcAm>0) & (Δc>ΔcAm/2)) | ((ΔcAm<0) & (Δc<ΔcAm/2))
-    Δc = np.where(overflow, ΔcAm/2, Δc)
-    Δ2c = np.diff(Δc)
-    
-    vessel.cAm[1:-1] += 0.5 * Δ2c
-    vessel.cAm[0] += 0.5 * Δc[0]
-    vessel.cAm[-1] -= 0.5 * Δc[-1]
-    
-# --------------------------------------------------------------------------------
-
-def _total_mix(model: BaseModel) -> None:
-    
-    vessel = model.vessel
-    cEm = vessel.cEm
-    c0 = 0.75*cEm[:, 0] + 0.25*cEm[:, 1]
-    c1 = 0.75*cEm[:, -1] + 0.25*cEm[:, -2]
-    cEm[:, 1:-1] = 0.25 * (cEm[:, :-2] + 2*cEm[:, 1:-1] + cEm[:, 2:])
-    cEm[:, 0] = c0
-    cEm[:, -1] = c1
-    
-def _total_mix_analyte(model: BaseModel) -> None:
-    
-    vessel = model.vessel
-    cAm = vessel.cAm
-    c0 = 0.75*cAm[0] + 0.25*cAm[1]
-    c1 = 0.75*cAm[-1] + 0.25*cAm[-2]
-    cAm[1:-1] = 0.25 * (cAm[:-2] + 2*cAm[1:-1] + cAm[2:])
-    cAm[0] = c0
-    cAm[-1] = c1
-    
-@lru_cache(maxsize=None)
-def _get_diffusion_factor_E(model: BaseModel, E_diff: tuple) -> ndarray:
-    
-    vessel = model.vessel
-    
-    D = np.reshape(E_diff, (-1, 1))
-    dL = model.dL / 2
-    dV = vessel.dVm / 2 # shape(N,)
-    dt = model.dt
-    S = model.S / (1+vessel.phase_ratio) # shape(N,)
-    
-    return D*S[:-1]*dt / (dL*dV[:-1]) * 6e4 # shape(M, N-1) 
-    
-    
-def builtin_eluent_diffusion_method(model: BaseModel, /, *,
-    E_diff: tuple | list | ndarray =None) -> None:
-    '''
-    A built-in method to simulate eluent diffusion.
-    Modify model.vessel in-place...
-    
-    E_diff: shape(M,), the diffusion coefficients of the competing ions in cm**2/sec.
-    If the diffusion coefficients is not given, model will bypass this method.
-    '''
-    E_diff = np.array(E_diff)
-    if np.all(np.isnan(E_diff)):
-        return
-    else:
-        E_diff[np.isnan(E_diff)] = 0.0
-    
-    vessel = model.vessel
-    ΔcEm = np.diff(vessel.cEm) # shape(M, N-1)
-    Δc = _get_diffusion_factor_E(model, tuple(E_diff)) * ΔcEm # shape(M, N-1) 
-    overflow = ((ΔcEm>0) & (Δc>ΔcEm/2)) | ((ΔcEm<0) & (Δc<ΔcEm/2))
-    Δc = np.where(overflow, ΔcEm/2, Δc) # shape(M, N-1) in case of overflow
-    Δ2c = np.diff(Δc) # shape(M, N-2)
-    
-    vessel.cEm[:,1:-1] += 0.5 * Δ2c
-    vessel.cEm[:,0] += 0.5 * Δc[:,0]
-    vessel.cEm[:,-1] -= 0.5 * Δc[:,-1]
-    
-# --------------------------------------------------------------------------------
-
-def builtin_diffusion_method(model: BaseModel, /, *,
-    A_diff: float =None,
-    E_diff: tuple | list | ndarray =None,
-    ):
-    
-    builtin_analyte_diffusion_method(model, A_diff=A_diff)
-    builtin_eluent_diffusion_method(model, E_diff=E_diff)
-
-# --------------------------------------------------------------------------------
-
-def builtin_fill_column_with_eluent(
-    model: BaseModel, /, *, cE_fill: list | tuple | ndarray):
-    '''
-    cE_fill: shape(M,), concentrations of competing ions to fill  in the column,
-        usually the inital state of the eluent.
-    Support single-spieces eluents;
-    Compatible with multi-spieces eluents.
-    Modify model.vessel in-place.
-    '''
-    
-    cEm = np.array([np.ones(model.N) * c for c in cE_fill])
-    nEs = np.reshape(
-        np.ones(model.N * model.M) * model.Q / model.N / abs(sum(model.y)) * 1000,
-        (model.M, model.N)) # nmol
-    
-    model.vessel.cEm = cEm
-    model.vessel.nEs = nEs
-    
-def builtin_init_vessel_with_injection(
-    model: BaseModel, /, *, cA: float, cE: list | tuple | ndarray
-    ):
-    '''
-    Fill the tubing void with analyte and competing ions.
-    No equilibriums between SP and MP will be performed.
-    Should be only used for tubings without SP, such as in the scenerio of injection.
-    '''
-    cAm = np.ones(model.N) * cA
-    cEm = np.ones((model.M, model.N)) * np.reshape(cE, (model.M, 1))
-    
-    model.vessel.cAm = cAm
-    model.vessel.cEm = cEm
-    
-    
-# --------------------------------------------------------------------------------
 @dataclass(frozen=False, kw_only=True)
 class _EluentFlow:
     '''
@@ -466,10 +305,11 @@ class GenericDiscontinousSegmentedModel(BaseModel):
     length: float
     ID: float
     ignore_tiny_amount: float =1e-20
-    kmap: Callable[[ndarray,], ndarray] =builtin_no_retain_kmap
-    distribute: Callable[[BaseModel, ...], None] =builtin_bypass_method
-    post_distribute: Callable[[BaseModel, ...], None] =builtin_bypass_method
-    init_vessel: Callable[[BaseModel, ...], None] =builtin_bypass_method
+    kmap: Callable[[ndarray,], ndarray] =no_retain_kmap
+    hmap: Callable[[float, ndarray,], ndarray] =bypass_hmap
+    distribute: Callable[[BaseModel, ...], None] =bypass_method
+    post_distribute: Callable[[BaseModel, ...], None] =bypass_method
+    init_vessel: Callable[[BaseModel, ...], None] =bypass_method
     distribute_params: dict =field(default_factory=dict)
     post_distribute_params: dict =field(default_factory=dict)
     init_vessel_params: dict =field(default_factory=dict)
@@ -805,6 +645,10 @@ GenericDiscontinousSegmentedModel.__init__.__doc__ = '''
         the concentrations of competing ions in shape(M, T).
         If not given, the default kmap always returns -inf regardless of 
             eluent concentrations.
+    hmap: Callable[[float, ndarray,], ndarray].
+        A function detailing the plate height H (in mm) as a function of fr and cE.
+        Used for incomplete equibibrating models, Can be bypassed in complete 
+        equilibrating models as N is already designated.
     distribute: Callable[[BaseModel, ...], None].
         A function to compute the distribution of an analyte after a segmented 
         time flow. It should accept the a model object and kw-arguments (if needed)
@@ -837,24 +681,6 @@ GenericDiscontinousSegmentedModel.__init__.__doc__ = '''
 # In[5]:
 
 
-def _builtin_simple_equilibrium_distribution_method(
-    model: BaseModel,
-    ) -> None:
-    
-    tiny = model.ignore_tiny_amount
-    vessel = model.vessel
-    
-    A = vessel.fixed_nA
-    tinyA = (A<tiny)
-    mask = ~tinyA
-    logk = vessel.logk[mask]
-    cAm = vessel.cAm[mask]
-    nAs = vessel.nAs[mask]
-    dVm = vessel.dVm[mask] 
-    vessel.cAm[mask], vessel.nAs[mask] = complete_simple_equilibrium(logk, cAm, nAs, dVm)
-    
-# --------------------------------------------------------------------------------
-
 @dataclass(kw_only=True, frozen=True, repr=False)
 class DSM_SimpleEquilibriums(GenericDiscontinousSegmentedModel):
     '''
@@ -865,11 +691,7 @@ class DSM_SimpleEquilibriums(GenericDiscontinousSegmentedModel):
         the column's Stationary Phase (SP) and Mobile Phase (MP) is ignored. 
         Consequently, the capacity factor (k) of the analyte 
         is determined solely by the input concentrations of the competing ions.
-    Alias: DSM_SEQ
-    ----------
-    Issue Fixed on 2024/04/10:  The `kmap` function now directly returns `logk`,
-        eliminating the need for repetitive calculations using `np.log10(k)`.
-        Enhancing the effieciency of this model by ~ 100%...
+    Alias: DSM_SE, DSM_SEQ
         
     '''
     distribute: Callable[[BaseModel, ...], None] =None
@@ -882,8 +704,8 @@ class DSM_SimpleEquilibriums(GenericDiscontinousSegmentedModel):
                 '''the distribution method of this model is predetermined.''')
             
         object.__setattr__(self,
-            'distribute', _builtin_simple_equilibrium_distribution_method)
-        super().__post_init__()
+            'distribute', simple_equilibrium_distribution_method)
+        super().__post_init__() # Important: self.distribute -> Bound method in __post_init__
         
     # --------------------------------------------------------------------------------
     
@@ -900,7 +722,7 @@ DSM_SimpleEquilibriums.__init__.__doc__ = '''
     '''
 # --------------------------------------------------------------------------------
 
-DSM_SEQ = DSM_SimpleEquilibriums
+DSM_SE = DSM_SEQ = DSM_SimpleEquilibriums
 
 # --------------------------------------------------------------------------------
 
@@ -908,51 +730,20 @@ DSM_SEQ = DSM_SimpleEquilibriums
 # In[6]:
 
 
-def _builtin_complete_equilibrium_distribution_method(
-    model: BaseModel,
-    ) -> None:
-    
-    tiny = model.ignore_tiny_amount
-    x, y = abs(model.x), abs(model.y[0])
-    K = model.K
-    vessel = model.vessel
-    
-    A = vessel.fixed_nA
-    B = vessel.fixed_nE[0, :]
-    mask = (A>=tiny) & (B>=tiny)
-    
-    Q = vessel.dQ[mask]
-    Vm = vessel.dVm[mask]
-    Vs = vessel.dVs[mask]
-    nAm_ = vessel.nAm[mask]
-    nAs_ = vessel.nAs[mask]
-    nEm_ = vessel.nEm[0, mask]
-    nEs_ = vessel.nEs[0, mask]
-
-    nAm, nAs, nEm, nEs = complete_equilibrium(
-        K, Q, Vm, Vs, x, y, nAm_, nAs_, nEm_, nEs_)
-        
-    vessel.cAm[mask] = nAm / Vm
-    vessel.nAs[mask] = nAs
-    vessel.cEm[0, mask] = nEm / Vm
-    vessel.nEs[0, mask] = nEs
-
 @dataclass(kw_only=True, frozen=True, repr=False)
 class DSM_CompleteEquilibriums(GenericDiscontinousSegmentedModel):
     '''
     A "harder" version of DSM_SimpleEquilibriums model. This model takes
-        into consideration the redistribution of both analyte and competing 
+        into consideration the redistribution of both analyte and eluent 
         ion (competing ion) between column MP and SP.
-    Obviously it takes a lot more computation efforts than the simplified version but
-        to my surprise it's even somehow faster than the latter as for single-charged 
-        analytes. Still need to find out why...(Already fixed by 2024/04/10, 
-        see docstring of `DSM_SimpleEquilibriums`)...
         It is 30-50% as slower for double-charged ones, and only applies well for 
         single/double-charged analytes and single-spiecies single-charged eluents.
         When passing a non-integer charge, this model will degrade and become
         unbearably slow... (need to solve non-linear equations)
     This model is able to model column overloading.
-    Alias: DSM_CEQ
+    Alias: DSM_CE DSM_CEQ
+    
+    reference: M. Novic et al / J. Chromatogr. A 922 (2001) 1–11.
     '''
     distribute: Callable[[BaseModel, ...], None] =None
         
@@ -964,9 +755,9 @@ class DSM_CompleteEquilibriums(GenericDiscontinousSegmentedModel):
                 '''the distribution method of this model is predetermined.''')
             
         object.__setattr__(self,
-            'distribute', _builtin_complete_equilibrium_distribution_method)
+            'distribute', complete_equilibrium_distribution_method)
         
-        super().__post_init__()
+        super().__post_init__() # Important: self.distribute -> Bound method in __post_init__
         
         if self.M != 1 or abs(self.y[0]) != 1:
             raise ValueError(
@@ -1006,7 +797,7 @@ DSM_CompleteEquilibriums.__init__.__doc__ = '''
     '''      
 # --------------------------------------------------------------------------------
 
-DSM_CEQ = DSM_CompleteEquilibriums
+DSM_CE = DSM_CEQ = DSM_CompleteEquilibriums
 
 # --------------------------------------------------------------------------------
 
@@ -1015,15 +806,33 @@ DSM_CEQ = DSM_CompleteEquilibriums
 
 
 @dataclass(kw_only=True, frozen=True, repr=False)
-class DSM_IncompleteEquilibriums(GenericDiscontinousSegmentedModel):
+class DSM_IncompleteSimpleEquilibriums(DSM_SimpleEquilibriums):
     '''
     To.Do.
     Expected to handle peak widths more accurately for gradient eluents.
     '''
     
-    def __post__init(self):
+    hmap: Callable[[ndarray], ndarray]
+    
+    
+    def __post_init__(self):
         
-        raise NotImplementedError
+        object.__setattr__(self, 'distribute', ...) # To do modify 'distribute'
+        
+        # Important: self.distribute -> Bound method in __post_init__
+        super().__post_init__()
+        
+    # --------------------------------------------------------------------------------
+    
+    @cached_property
+    def _drop_when_updated(self) -> tuple:
+        
+        return ('dt',)
+    
+    @cached_property
+    def _mutables(self) -> tuple:
+        
+        return ('fr', 'backflush',)
 
 # --------------------------------------------------------------------------------
 
@@ -1032,7 +841,7 @@ class DSM_IncompleteEquilibriums(GenericDiscontinousSegmentedModel):
 
 
 # Helper functions:
-
+@deprecated(reason='No longer needed. Will be removed soon...')
 def load_input_data_for_test(
     model: GenericDiscontinousSegmentedModel,
     eluent: Eluent,
@@ -1083,8 +892,10 @@ def load_input_data_for_test(
 __all__ = [
     'GenericDiscontinousSegmentedModel',
     'DSM_SimpleEquilibriums',
+    'DSM_SE',
     'DSM_SEQ',
     'DSM_CompleteEquilibriums',
+    'DSM_CE',
     'DSM_CEQ',
     ]
 

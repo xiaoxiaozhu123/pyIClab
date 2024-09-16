@@ -20,7 +20,9 @@ from pyIClab.ions import *
 from pyIClab.ionchromatograph import *
 from pyIClab.assemblies import *
 from pyIClab.engines import *
+from pyIClab.updates import UpdateLogger, updates
 
+update_logger = UpdateLogger(updates)
 # --------------------------------------------------------------------------------
 
 
@@ -28,7 +30,7 @@ from pyIClab.engines import *
 
 
 __author__ = 'Kenny Zhang'
-__version__ = '2024.06.06'
+__version__ = '2024.9.16'
 __license__ = '''
     GNU GENERAL PUBLIC LICENSE
     Version 3, 29 June 2007

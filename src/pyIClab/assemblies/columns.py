@@ -36,7 +36,7 @@ from pyIClab._baseclasses import (
     NamedTrinket, BaseModel,
     )
 from pyIClab.assemblies.generics import GenericAccessory
-from pyIClab.beadedbag import is_notebook
+from pyIClab.utils.beadedbag import is_notebook
 
 # --------------------------------------------------------------------------------
 _LAB_PATH = str(files('pyIClab'))
@@ -140,7 +140,7 @@ class GenericTubing(GenericAccessory):
         
         t0 = self.current_time.magnitude
         t1 = self.prev.current_time.magnitude
-        input_datasets = deepcopy(self.prev.output)
+        input_datasets = self.prev.output.copy()
         # If the prev.input contains no ion data
         # set the input concentration always = 0
         for model in models:

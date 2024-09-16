@@ -35,7 +35,7 @@ from pyIClab.errors import (
     InterLockError, ErrorStat,
     )
 from pyIClab._baseclasses import BaseAccessory, NamedTrinket
-from pyIClab.beadedbag import mpl_custom_rcconfig, is_notebook
+from pyIClab.utils.beadedbag import mpl_custom_rcconfig, is_notebook
 
 
 # --------------------------------------------------------------------------------

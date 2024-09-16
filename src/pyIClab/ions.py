@@ -144,13 +144,6 @@ class Ion:
         
         return self.charge > 0
     
-    @property
-    def organic(self) -> bool:
-        
-        return 'C' in self.elements and (
-            'H' in self.elements) and (
-            self.formula != 'HCO3[-1]')
-    
     # --------------------------------------------------------------------------------
     
     def __repr__(self) -> str:
@@ -244,8 +237,8 @@ class _IonLibary:
 
 # --------------------------------------------------------------------------------
 
-db = pd.read_csv(files('pyIClab') / 'db//ionlib//IonLibrary.csv', comment='#')
-IonLibrary = _IonLibary(db)
+_db = pd.read_csv(files('pyIClab') / 'db//ionlib//IonLibrary.csv', comment='#')
+IonLibrary = _IonLibary(_db)
 
 
 # In[6]:

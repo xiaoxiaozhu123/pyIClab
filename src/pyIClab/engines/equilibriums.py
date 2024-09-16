@@ -14,6 +14,7 @@ Copyright (C) 2024 PyICLab, Kai "Kenny" Zhang
 
 ##### Built-in import #####
 
+import warnings
 from typing import Tuple, Callable
 
 ##### External import #####
@@ -23,9 +24,19 @@ from numpy import ndarray
 from scipy.optimize import fsolve, newton_krylov
 from deprecated import deprecated
 
+try:
+    from scipy.optimize import NoConvergence
+except ImportError:
+    with warnings.catch_warnings(action='ignore'):
+        from scipy.optimize.nonlin import NoConvergence
+
 ##### Local import #####
 
-from pyIClab.beadedbag import cubic_solver
+from pyIClab.utils.beadedbag import cubic_solver
+
+##### Compatibility  ##### DO NOT REMOVE !!
+
+from pyIClab.utils.optimize import find_x_LSSM, find_K_LSSM
 
 # --------------------------------------------------------------------------------
 
@@ -85,6 +96,10 @@ def complete_equilibrium(
     Eq(2): nAm + nAs = init(nAm + nAs)
     Eq(3): nEm + nEs = init(nEm + nEs)
     Eq(4): Q = nAs + nEs
+    Let  nAm  nAs  nEm  nEs
+          α    β    γ    θ
+    init(nAm + nAs) = A
+    init(nEm + nEs) = B
     '''
     assert np.all(K != 1), 'The analyte ion should not be the eluting ion!'
     
@@ -131,7 +146,7 @@ def _complete_equilibrium_equal_charges(A, B, Q, K, y):
         
     for arr in (β, γ):
         mask = (arr>Q0) & (arr<(Q0+1e-7))
-        arr = np.where(mask, Q0, arr)
+        arr[mask] = Q0[mask]
         
     return α, β, γ, θ
 
@@ -171,7 +186,7 @@ def _complete_equilibrium_double_charges(A, B, Q, K, y, Vm, Vs):
     return α, β, γ, θ
 
 # --------------------------------------------------------------------------------
-@deprecated(reason='Unbearably slow. It will be removed soon.')
+
 def _complete_equilibrium_arbitrary_charges_fsolve(
     nAm, nAs, nEm, nEs, Q, K, x, y, Vm, Vs):
     '''
@@ -247,7 +262,7 @@ def _complete_equilibrium_arbitrary_charges_fsolve(
     return nAm, nAs, nEm, nEs
 
 # --------------------------------------------------------------------------------
-def _complete_equilibrium_arbitrary_charges(
+def _complete_equilibrium_arbitrary_charges_Newton_Krylov(
     nAm, nAs, nEm, nEs, Q, K, x, y, Vm, Vs):
     '''
     This method uses the Newton-Krylov from scipy.optimize for finding the roots 
@@ -311,38 +326,12 @@ def _complete_equilibrium_arbitrary_charges(
 
 # --------------------------------------------------------------------------------
 
-
-# In[5]:
-
-
-def find_x_LSSM(LSSM_kmap: Callable, y: int | float) -> int | float:
+def _complete_equilibrium_arbitrary_charges(*args, **kwargs):
     
-    c = np.arange(5, 66, 10).reshape(1, -1)
-    logc = np.log10(c).flatten()
-    logk = LSSM_kmap(c)
-    
-    x = np.polyfit(logc, logk, 1)[0] * (-y)
-    
-    return int(np.round(x)) if abs(np.round(x) - x) < 0.01 else x
-    
-# -------------------------------------------------------------------------------- 
-
-def find_K_LSSM(
-    a: float,
-    phase_ratio: float,
-    Q: float, # umol
-    Vm: float, # mL
-    x: int | float,
-    y: int | float,
-    ) -> float:
-    '''
-    Equilibrium:
-        yA(MP) + xE(SP)  <=>  yA(SP) + xE(MP)
-         cAm      cEs          cAs      cEm
-    '''
-    logK = y*a + (x-y)*np.log10(phase_ratio) + x*np.log10(Vm/Q*y)
-            
-    return 10**logK
+    try:
+        return _complete_equilibrium_arbitrary_charges_Newton_Krylov(*args, **kwargs)
+    except NoConvergence:
+        return _complete_equilibrium_arbitrary_charges_fsolve(*args, **kwargs)
 
 # --------------------------------------------------------------------------------
 

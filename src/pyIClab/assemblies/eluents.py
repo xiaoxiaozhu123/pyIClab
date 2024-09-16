@@ -34,7 +34,7 @@ from pyIClab.errors import (
     ConfigurationError, CounterPumpingError, DuplicatedIonError,
     ProfileError,
     )  
-from pyIClab.beadedbag import mpl_custom_rcconfig, is_notebook
+from pyIClab.utils.beadedbag import mpl_custom_rcconfig, is_notebook
 
 # --------------------------------------------------------------------------------
 

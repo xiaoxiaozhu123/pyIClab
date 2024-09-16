@@ -37,7 +37,7 @@ from pyIClab.interface import (
 from pyIClab.errors import (
     ProfileError, InjectionError,
     )
-from pyIClab.beadedbag import Progressor
+from pyIClab.utils.beadedbag import Progressor
 from pyIClab.assemblies.generics import GenericAccessory, Side
 from pyIClab.assemblies.eluents import Eluent
 from pyIClab.assemblies.injections import (

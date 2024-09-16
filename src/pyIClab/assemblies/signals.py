@@ -35,7 +35,7 @@ from pyIClab.units import ParseQuantities
 from pyIClab.errors import (
     ProfileError, SuppressorOverVoltageError,
     )
-from pyIClab.beadedbag import is_notebook
+from pyIClab.utils.beadedbag import is_notebook
 from pyIClab.assemblies.generics import GenericAccessory
 
 ##### Conditional import #####
@@ -194,7 +194,7 @@ class Detector(GenericAccessory):
                     f'''{signal_type} is not supported. Options for signal_type: '''
                     '''"concentration", "conductivity".''')
         
-    def _get_signals_concentration(self, tmax: float) -> ndarray:
+    def _get_signals_concentration(self, tmax: float) -> pd.DataFrame:
         
         t = np.linspace(0, tmax, round(self.freq.magnitude * tmax * 60))
             
@@ -522,6 +522,7 @@ class PhreeqcSuppressor(Suppressor):
             if not i % 1000: # garbage collection
                 pp.remove_solutions(pp.get_solution_list())
                 
+        pp.remove_solutions(pp.get_solution_list())       
         tp.fillna(0.0, inplace=True)
      
         return tp.to_dict(orient='list')
@@ -552,14 +553,14 @@ class PhreeqcSuppressor(Suppressor):
         possible_components = list(component_table.keys())
         
         # Compatibility statement for InsufficientPhreeqcSuppressor
-        if type(self) is not InsufficientPhreeqcSuppressor:
+        if not isinstance(self, InsufficientPhreeqcSuppressor):
             if self.kind == 'anion':
                 possible_components.remove('K[+1]')
             else:
                 possible_components.remove('Cl[-1]')
         
         # Compatibility statement for ContaminatedPhreeqcSuppressor
-        if type(self) is not ContaminatedPhreeqcSuppressor:
+        if not isinstance(self, ContaminatedPhreeqcSuppressor):
             if not {'HCO3[-1]', 'CO3[-2]', 'CO2'} & set(df.columns):
                 possible_components.remove('HCO3[-1]')
                 possible_components.remove('CO3[-2]')
@@ -675,8 +676,7 @@ class InsufficientPhreeqcSuppressor(PhreeqcSuppressor):
             Defaults to 0.99999.
         '''
         
-        super().__init__(
-            name=name, kind=kind, _volume=_volume)
+        super().__init__(name=name, kind=kind, _volume=_volume)
         self._efficiency = float(_efficiency)
         assert 0 <= self._efficiency <= 1
         
@@ -802,11 +802,29 @@ class ContaminatedPhreeqcSuppressor(PhreeqcSuppressor):
 # In[10]:
 
 
+class ContaminatedPhreeqcSuppressorBeta(ContaminatedPhreeqcSuppressor):
+    
+    def _make_pseudo_eluent(self, *args, **kwargs):
+        
+        pseudo_datasets = super(
+            ContaminatedPhreeqcSuppressor, self)._make_pseudo_eluent(*args, **kwargs)
+        f0 = pseudo_datasets.get('CO2', lambda t: np.zeros_like(t))
+        f1 = pseudo_datasets.get('OH[-1]', lambda t: np.zeros_like(t))
+        pseudo_datasets['CO2'] = lambda t: f0(t) + f1(t)**0.5 * self._CO2_level
+        
+        return pseudo_datasets
+    
+
+
+# In[11]:
+
+
 __all__ = [
     'Detector',
     'QuickSuppressor',
     'PhreeqcSuppressor',
     'InsufficientPhreeqcSuppressor',
-    'ContaminatedPhreeqcSuppressor'
+    'ContaminatedPhreeqcSuppressor',
+    'ContaminatedPhreeqcSuppressorBeta',
     ]
 

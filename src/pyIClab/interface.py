@@ -15,21 +15,18 @@ import inspect
 from dataclasses import dataclass
 from typing import Callable
 from abc import abstractmethod, update_abstractmethods
+from functools import lru_cache
 
 ##### External import ######
 
 import numpy as np
 import pandas as pd
-from scipy.interpolate import LinearNDInterpolator
-from scipy.stats import linregress
-from scipy.optimize import curve_fit
 from numpy import ndarray
 from deprecated import deprecated
 
 ##### Loacal import ######
 
 import pyIClab.ions as ions_
-from pyIClab.beadedbag import proj2hull
 from pyIClab._baseclasses import (
     BaseModel, BaseConstructor, BaseIonChromatograph,
     )
@@ -40,12 +37,25 @@ from pyIClab.engines.models import (
     GenericDiscontinousSegmentedModel,
     DSM_CompleteEquilibriums,
     DSM_SimpleEquilibriums,
-    builtin_no_retain_kmap,
-    builtin_diffusion_method,
-    builtin_fill_column_with_eluent,
-    builtin_bypass_method,
-    builtin_init_vessel_with_injection,
     )
+from pyIClab.utils.optimize import (
+    get_plates_from_constant_dV, get_hmap,
+    get_kmap, get_kmap_carbonates_LSSM_EA,
+    )
+from pyIClab.utils.methods import (
+    no_retain_kmap, diffusion_method, fill_column_with_eluent,
+    bypass_method, init_vessel_with_injection,
+    )
+
+##### Compatibility ##### DO NOT REMOVE IT!!
+
+_builtin_get_kmap = get_kmap
+_builtin_get_kmap_carbonates_LSSM_EA = get_kmap_carbonates_LSSM_EA
+builtin_no_retain_kmap = no_retain_kmap
+builtin_diffusion_method = diffusion_method
+builtin_fill_column_with_eluent = fill_column_with_eluent
+builtin_bypass_method = bypass_method
+builtin_init_vessel_with_injection = init_vessel_with_injection
 
 # --------------------------------------------------------------------------------
 
@@ -197,7 +207,7 @@ class DSMConstructor(AbstractDSMConstructor):
             return 0.0
         else:
             return abs(self.host.fr.to('mL/min').magnitude)
-        
+    
     def set_backflush(self) -> bool:
         
         return self.host.flow_direction == -1
@@ -222,6 +232,7 @@ class DSMConstructor(AbstractDSMConstructor):
         
         return 1e-9
     
+    @lru_cache(maxsize=None)
     def _set_init_vessel_and_params(self) -> tuple[Callable, dict]:
         
 #         assert self.ic.current_time.magnitude == 0.0
@@ -230,12 +241,12 @@ class DSMConstructor(AbstractDSMConstructor):
             eluent = self.host.flow_head
             cE_fill = [eluent(0).get(ion) for ion in self.competing_ions]
             init_vessel_params = dict(cE_fill=cE_fill)
-            return builtin_fill_column_with_eluent, init_vessel_params
+            return fill_column_with_eluent, init_vessel_params
         elif self.host not in df['accessory'].to_list():
             # No injection into the tubing
             # Default for models is to fill the tubing with eluent (c = 1e-4 mM)
             # No Need to specify init_vessel method
-            return builtin_bypass_method, {}
+            return bypass_method, {}
         else:
             profile = df[df['accessory']==self.host].iloc[0]  # DataSeries
             if self.analyte not in profile.index or np.isnan(profile[self.analyte]):
@@ -244,14 +255,14 @@ class DSMConstructor(AbstractDSMConstructor):
                 cE_fill = [profile[ion] if ion in profile.index else (
                     1e-4) for ion in self.competing_ions]
                 init_vessel_params = dict(cE_fill=cE_fill)
-                return builtin_fill_column_with_eluent, init_vessel_params
+                return fill_column_with_eluent, init_vessel_params
             else:
                 # Injection containing model analyte..
                 cA = profile[self.analyte]
                 cE = [profile[ion] if ion in profile.index else (
                     1e-4) for ion in self.competing_ions]
-                return builtin_init_vessel_with_injection, dict(cA=cA, cE=cE)
-                     
+                return init_vessel_with_injection, dict(cA=cA, cE=cE)
+    
     def set_init_vessel(self):
         
         return self._set_init_vessel_and_params()[0]
@@ -287,11 +298,11 @@ class DSMConstrutorForTubing(DSMConstructor):
         
         Vm = self.host.Vm.to('mL').magnitude # mL
         
-        return _builtin_get_plates_from_constant_dV(Vm=Vm)
+        return get_plates_from_constant_dV(Vm=Vm)
     
     def set_kmap(self) -> Callable:
         
-        return builtin_no_retain_kmap
+        return no_retain_kmap
     
     def set_distribute(self) -> Callable:
         # Use default: bypass
@@ -305,7 +316,7 @@ class DSMConstrutorForTubing(DSMConstructor):
     
     def set_post_distribute(self) -> Callable:
         
-        return builtin_diffusion_method
+        return diffusion_method
     
     def set_post_distribute_params(self) -> dict:
         
@@ -375,19 +386,6 @@ class DSMConstrutorForColumns(DSMConstructor):
         assert host in ic.accessories
         
     # --------------------------------------------------------------------------------
-    
-    @deprecated(
-        reason=('''It appears that using N_exp directly results in a larger ''' 
-            '''discrepancy between the model predictions and experimental results.'''),
-        version='2024.5.8',
-        )
-    def set_N(self):
-        
-        N = self._retreive_N_from_designated_table()
-        if not pd.isna(N):
-            return N
-        else:
-            return self._find_N_from_Hdata_under_average_eluent_condition()
         
     def set_N(self):
         '''
@@ -424,24 +422,41 @@ class DSMConstrutorForColumns(DSMConstructor):
         assert self.host.flow_direction
         eluent = self.host.flow_head
         c_mean = eluent.mean()
+        concentrations=tuple(c_mean.get(ion, 1e-4) for ion in self.competing_ions)
+        fr = self.set_fr()
+        length = self.set_length()
+        hmap = self.set_hmap()
+        h = hmap(fr, concentrations)
         
-        return _builtin_get_plates_for_isocratic_eluents(
-            Hdata=self.host.sp.Hdata,
-            analyte=self.analyte,
-            competing_ions=self.ic.competing_ions,
-            concentrations=tuple(c_mean.get(ion, 1e-4) for ion in self.competing_ions),
-            fr=self.set_fr(),
-            length=self.set_length(),
-            )
+        return int(np.round(10 * length / h, -1))
     
     # --------------------------------------------------------------------------------
     
+    @lru_cache(maxsize=None)
     def set_kmap(self):
         
-        return _builtin_get_kmap(
+        return get_kmap(
             kdata=self.host.sp.kdata,
             analyte=self.analyte,
             competing_ions=self.competing_ions)
+    
+    # --------------------------------------------------------------------------------
+    
+    @lru_cache(maxsize=None)
+    def set_hmap(self):
+        
+        def hmap(fr: float, cE: ndarray):
+            
+            h = get_hmap(
+                Hdata=self.host.sp.Hdata,
+                analyte=self.analyte,
+                competing_ions=self.competing_ions,
+                fr=fr,
+                )(cE)
+            
+            return h
+            
+        return hmap
     
     # --------------------------------------------------------------------------------
     
@@ -457,7 +472,7 @@ class DSMConstrutorForColumns(DSMConstructor):
     
     def set_post_distribute(self) -> Callable:
         
-        return builtin_diffusion_method
+        return diffusion_method
     
     def set_post_distribute_params(self) -> dict:
         
@@ -519,248 +534,6 @@ class DSM_CEConstrutor(DSMConstrutorForColumns):
 
 
 # In[8]:
-
-
-# Functions to get plate numbers from stationary phase database...
-
-def _builtin_get_plates_for_isocratic_eluents(
-    *,
-    Hdata: dict,
-    analyte: str,
-    competing_ions: tuple[str, ...],
-    concentrations: tuple[float, ...],
-    fr: float,
-    length: float
-    ):
-    
-    df = Hdata.get(competing_ions).copy()
-    df = df[df['analyte']==analyte]
-    
-    if len(df) < 3:
-        raise ValueError(f'Not enough data points for {analyte}.')
-        
-    if len(competing_ions) == 1 and len(df[df['fr']==fr]) >= 3:
-        return _get_plates_from_1Dinterpolator(
-            df=df,
-            ion=competing_ions[0],
-            c=concentrations[0],
-            fr=fr,
-            length=length,
-            )
-    elif len(df[df['fr']==fr]) >= 3:
-        return _get_plates_from_griddata_constant_fr(
-            df=df,
-            competing_ions=competing_ions,
-            concentrations=concentrations,
-            fr=fr,
-            length=length,
-            )
-
-    else:
-        return _get_plates_from_griddata(
-            df=df,
-            competing_ions=competing_ions,
-            concentrations=concentrations,
-            fr=fr,
-            length=length,
-            )
-    
-def _get_plates_from_1Dinterpolator(
-    *,
-    df: pd.DataFrame,
-    ion: str,
-    c: float,
-    fr: float,
-    length: float,
-    ):
-    
-    df = df[df['fr']==fr]
-    df = df.sort_values(by=ion, ignore_index=True)
-    cdata = df.loc[:, ion].to_numpy()
-    Hdata = df.loc[:, 'H'].to_numpy()
-    Hi = np.interp(c, cdata, Hdata)
-    Ni = int(np.round(length / Hi * 10, -1))
-    
-    return Ni
-
-def _get_H_from_griddata(
-    point: ndarray | list,
-    xydata: ndarray | list,
-    Hdata: ndarray | list,
-    ) -> float:
-    
-    point = np.array(point, dtype=np.float64)
-    xydata = np.array(xydata, dtype=np.float64)
-    Hdata = np.array(Hdata, dtype=np.float64)
-    point = proj2hull(point, xydata)
-    
-    return np.squeeze(LinearNDInterpolator(xydata, Hdata)(point))
-    
-def _get_plates_from_griddata_constant_fr(
-    df: pd.DataFrame,
-    competing_ions: tuple[str, ...],
-    concentrations: tuple[float, ...],
-    fr: float,
-    length: float,
-    ) -> int:
-    
-    df = df[df['fr']==fr]
-    xy_keys = list(competing_ions)
-    xydata = df[xy_keys].to_numpy()
-    Hdata = df['H'].to_numpy()
-    point = np.array(concentrations)
-    H = _get_H_from_griddata(point, xydata, Hdata)
-    
-    return int(np.round(10 * length / H, -1))
-    
-def _get_plates_from_griddata(
-    df: pd.DataFrame,
-    competing_ions: tuple[str, ...],
-    concentrations: tuple[float, ...],
-    fr: float,
-    length: float,
-    ):
-    
-    xy_keys = ['fr', *competing_ions]
-    xydata = df[xy_keys].to_numpy()
-    Hdata = df['H'].to_numpy()
-    point = np.array([fr, *concentrations])
-    H = _get_H_from_griddata(point, xydata, Hdata)
-    
-    return int(np.round(10 * length / H, -1))
-      
-def _builtin_get_plates_from_constant_dV(
-    *,
-    Vm: float,
-    dV: float =None, 
-    ):
-    '''
-    Vm: float, in mL.
-    dV: float, optional, defaults to 0.1, in uL.
-    '''
-    
-    dV = 0.1 if dV is None else dV
-    Vm *= 1000
-    
-    return max(10, int(np.round(Vm / dV, -1)))
-
-
-# In[9]:
-
-
-# --------------------------------------------------------------------------------
-# Functions to get func kmap from stationary phase database...
-
-def _builtin_get_kmap(
-    *,
-    kdata: dict,
-    analyte: str,
-    competing_ions: tuple[str, ...],
-    ) -> Callable[[ndarray,], ndarray]:
-    
-    df = kdata.get(competing_ions).copy()
-    df = df[df['analyte']==analyte]
-    
-    if len(competing_ions) == 1 and len(df) >= 3:
-        return _builtin_get_kmap_single_eluent(
-            df=df, analyte=analyte, ion=competing_ions[0])
-    elif set(competing_ions) == {'CO3[-2]', 'HCO3[-1]'}:
-        return _builtin_get_kmap_carbonates_simple_LSSM(df=df)
-    else:
-        raise NotImplementedError
-    
-def _builtin_get_kmap_single_eluent(
-    *,
-    df: pd.DataFrame,
-    analyte: str,
-    ion: str,
-    ) -> Callable[[ndarray,], ndarray]:
-    '''
-    logk = a + b*logc
-    => Returns: f = 10**(a + b*log10(c))
-    '''
-    
-    logc = np.log10(df[ion])
-    logk = np.log10(df['k'])
-    
-    b, a, r_value, p_value, std_err = linregress(
-        x=logc, y=logk)
-    
-    if r_value**2 <= 0.9:
-        warnings.warn(
-            f'''Poor fitting of logk-logc obtained for {analyte} '''
-            f'''with R-square: {r_value**2:4f}.''')
-    
-    # np.squeeze is essential, because cE is in shape(M, N).
-    # For single-species eluents M = 1.
-    return lambda cE: a + b*np.log10(np.squeeze(cE))
-
-def _builtin_get_kmap_carbonates_simple_LSSM(*, df: pd.DataFrame) -> Callable[[ndarray,], ndarray]:
-    '''
-    A simple LSSM for carbonate buffer, kmap is described as:
-    logk = A + B*logCO3 + C*logHCO3
-    It is the default method in PyICLab for carbonate buffers, may loss accuraccy on some occasions.
-    '''
-    def fit_func(logc, A, B, C):
-        logCO3, logHCO3 = logc
-        return A + B*logCO3 + C*logHCO3
-
-    carb, bicarb = 'CO3[-2]', 'HCO3[-1]'
-    logCO3 = np.log10(df[carb])
-    logHCO3 = np.log10(df[bicarb])
-    logc = np.array([logCO3, logHCO3])
-    logk = np.log10(df['k'])
-    initial_guess = [1, -0.5, -0.05]
-    
-    (A, B, C), pcov = curve_fit(fit_func, logc, logk, p0=initial_guess)
-    
-    def kmap(cE: ndarray):
-        
-        cE = np.array(cE, dtype=np.float64)
-        cE[cE<1e-4] = 1e-4
-        
-        return A + np.sum(np.log10(cE)*np.array([[B], [C]]), axis=0)
-    
-    return kmap
-
-def _builtin_get_kmap_carbonates_LSSM_EA(*, df: pd.DataFrame) -> Callable[[ndarray,], ndarray]:
-    '''
-    reference:
-    Analytical Chemistry, Vol. 74, No. 23, December 1, 2002
-    
-    I think they've got the wrong Equation(4) in Trends in Analytical Chemistry 80 (2016) 625–635.
-    [Et] -> log[Et]
-    '''
-    
-    def fit_func(cE, f1, f2, f3, f4):
-        
-        c1 = cE[0, :]
-        Et = np.sum(cE, axis=0)
-        logEt = np.log10(Et)
-        
-        return (f1 + f2*logEt) + (f3 + f4*logEt)*np.log10(c1)
-    
-    carb, bicarb = 'CO3[-2]', 'HCO3[-1]'
-    cE = np.array([df[carb].to_numpy(), df[bicarb].to_numpy()])
-    logk = np.log10(df['k'])
-    initial_guess = [1, -0.5, 1, -0.5]
-    
-    constants, pcov = curve_fit(fit_func, cE, logk, p0=initial_guess)
-    
-    def kmap(cE: ndarray):
-        
-        cE = np.array(cE, dtype=np.float64)
-        cE[cE<1e-4] = 1e-4
-        
-        return fit_func(cE, *constants)
-    
-    return kmap   
-    
-        
-# --------------------------------------------------------------------------------
-
-
-# In[10]:
 
 
 __all__ = [
